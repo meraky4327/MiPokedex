@@ -1,0 +1,17 @@
+{
+  "name": "Mi Pokédex",
+  "short_name": "Pokédex",
+  "description": "Escanea tus cartas y lleva tu colección",
+  "lang": "es",
+  "start_url": "./#/escanear",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#171C2F",
+  "theme_color": "#171C2F",
+  "icons": [
+    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "iconos/icono.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
