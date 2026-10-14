@@ -137,7 +137,8 @@ const Guardado = (() => {
  * ------------------------------------------------------------------- */
 
 const Cat = { listo: false, error: null, sets: [], cartas: [], porId: new Map(),
-              porSet: new Map(), porGrupo: new Map(), generado: null, reconocibles: 0 };
+              porSet: new Map(), porGrupo: new Map(), generado: null, reconocibles: 0,
+              porDex: new Map(), porIlustrador: new Map(), pokemon: [], ilustradores: [] };
 
 async function cargarIndice() {
   let datos;
@@ -156,7 +157,8 @@ async function cargarIndice() {
   Cat.cartas = datos.cartas.map((f, i) => ({
     i,
     id: f[campo.id], nombre: f[campo.nombre], set: Cat.sets[f[campo.set]],
-    numero: f[campo.numero], rareza: f[campo.rareza], dex: f[campo.dex],
+    numero: f[campo.numero], rareza: f[campo.rareza],
+    dexs: Array.isArray(f[campo.dex]) ? f[campo.dex] : (f[campo.dex] ? [f[campo.dex]] : []),
     ilustrador: f[campo.ilustrador], categoria: f[campo.categoria], hp: f[campo.hp],
     tipos: f[campo.tipos] ? f[campo.tipos].split(",") : [],
     variantes: [...(f[campo.variantes] || "n")].map((l) => VARIANTE[l]).filter(Boolean),
@@ -170,7 +172,18 @@ async function cargarIndice() {
       if (!Cat.porGrupo.has(c.grupo)) Cat.porGrupo.set(c.grupo, []);
       Cat.porGrupo.get(c.grupo).push(c);
     }
+    c.dex = c.dexs[0] || 0;
+    for (const d of c.dexs) {
+      if (!Cat.porDex.has(d)) Cat.porDex.set(d, []);
+      Cat.porDex.get(d).push(c);
+    }
+    if (c.ilustrador) {
+      if (!Cat.porIlustrador.has(c.ilustrador)) Cat.porIlustrador.set(c.ilustrador, []);
+      Cat.porIlustrador.get(c.ilustrador).push(c);
+    }
   }
+  Cat.pokemon = (datos.pokemon || []).filter((p) => Cat.porDex.has(p.dex));
+  Cat.ilustradores = (datos.ilustradores || []).filter((n) => Cat.porIlustrador.has(n));
   Cat.reconocibles = Cat.cartas.filter((c) => c.huella).length;
   Cat.listo = true;
 }
@@ -608,36 +621,163 @@ function vistaEscaner() {
  * Colección
  * ------------------------------------------------------------------- */
 
+/* Selector de arriba: Sets · Pokémon · Ilustradores */
+function segmento(aqui) {
+  const op = [["sets", "Sets"], ["pokemon", "Pokémon"], ["ilustradores", "Ilustradores"]];
+  return `<nav class="segmento" aria-label="Ver la colección por">` +
+    op.map(([r, t]) => `<a href="#/${r}"${r === aqui ? ' class="aqui" aria-current="page"' : ""}>${t}</a>`).join("") +
+    `</nav>`;
+}
+
+function tomoProgreso(cartas, claveMaster) {
+  const master = Guardado.esMaster(claveMaster);
+  const { tengo, de } = progreso(cartas, master);
+  return { master, tengo, de, pct: de ? (100 * tengo / de).toFixed(1) : 0 };
+}
+
+function conmutador(clave, master, texto = "Contar reverses y holos aparte") {
+  return `<label class="conm"><input type="checkbox" data-master="${esc(clave)}"${master ? " checked" : ""}> ${texto}</label>`;
+}
+
 function vistaSets() {
   if (!Cat.listo) return vistaSinIndice();
   const distintas = Object.keys(Guardado.todo).filter((id) => Guardado.total(id) > 0).length;
   const copias = Object.keys(Guardado.todo).reduce((s, id) => s + Guardado.total(id), 0);
+  // Solo los sets que sigues enteros. Las cartas sueltas (de seguir un
+  // Pokémon o un ilustrador) se ven en sus pestañas.
   const completos = Cat.sets.filter((s) => s.completo);
-  const sueltos = Cat.sets.filter((s) => !s.completo);
 
   const tomo = (s) => {
     const cartas = Cat.porSet.get(s.id) || [];
-    const master = Guardado.esMaster(s.id);
-    const { tengo, de } = progreso(cartas, master);
-    const pct = de ? (100 * tengo / de).toFixed(1) : 0;
-    const nota = !s.completo ? `<p class="nota">Solo ${cartas.length} de sus cartas están en tu catálogo</p>`
-      : s.total && cartas.length < s.total ? `<p class="nota">${s.total - cartas.length} cartas aún no están en TCGdex</p>` : "";
+    const p = tomoProgreso(cartas, s.id);
+    const nota = s.total && cartas.length < s.total
+      ? `<p class="nota">${s.total - cartas.length} cartas aún no están en TCGdex</p>` : "";
     return `<div class="tomo" data-busca="${esc(normaliza(s.nombre + " " + s.id + " " + (s.serie || "")))}">` +
       `<a href="#/set/${encodeURIComponent(s.id)}"><div class="fila"><h3>${esc(s.nombre)}` +
       `<small>${esc([s.serie, s.fecha && s.fecha.slice(0, 4)].filter(Boolean).join(" · "))}</small></h3>` +
-      `<span class="cifra">${tengo}<span>/${de}</span></span></div>` +
-      `<div class="linea"><i style="width:${pct}%"></i></div>${nota}</a>` +
-      `<label class="conm"><input type="checkbox" data-master="${esc(s.id)}"${master ? " checked" : ""}> Contar reverses y holos aparte</label></div>`;
+      `<span class="cifra">${p.tengo}<span>/${p.de}</span></span></div>` +
+      `<div class="linea"><i style="width:${p.pct}%"></i></div>${nota}</a>` +
+      conmutador(s.id, p.master) + `</div>`;
   };
 
-  $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>
+  $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("sets")}
     <div class="resumen"><div><b>${distintas}</b><span>cartas distintas</span></div>
     <div><b>${copias}</b><span>copias en total</span></div></div>
-    ${buscador("Buscar un set")}
-    ${completos.map(tomo).reverse().join("")}
-    ${sueltos.length ? `<h2>Otros sets con alguna carta tuya</h2>${sueltos.map(tomo).reverse().join("")}` : ""}
+    ${completos.length ? buscador("Buscar un set") : ""}
+    ${completos.map(tomo).reverse().join("") || `<p class="vacio">Aún no sigues ningún set entero.</p>`}
     <p class="sinnada" id="sin-nada">Ningún set con ese nombre.</p>
     <p class="pie">Para añadir sets, ejecuta en el PC <code>python generar_indice.py --sets ID</code> y vuelve a publicar la carpeta app.</p></div>`;
+}
+
+/* --- Pokémon e ilustradores: una lista de los que sigues y, al buscar,
+ *     también los demás que haya en tu catálogo. ------------------------- */
+
+function nombrePokemon(dex) {
+  const seguido = Cat.pokemon.find((p) => p.dex === dex);
+  if (seguido) return seguido.nombre;
+  // El nombre más corto, sin contar las cartas dobles ("Mewtwo & Mew GX").
+  const cartas = Cat.porDex.get(dex) || [];
+  const solas = cartas.filter((c) => c.dexs.length === 1);
+  return (solas.length ? solas : cartas)
+    .reduce((a, c) => (!a || c.nombre.length < a.length ? c.nombre : a), "");
+}
+
+/* Portada: la primera carta que tengas; si no, la más reciente. */
+function portada(cartas) {
+  return cartas.find((c) => Guardado.total(c.id) > 0 && c.imagen) ||
+         [...cartas].reverse().find((c) => c.imagen) || cartas[0];
+}
+
+function nSets(cartas) { return new Set(cartas.map((c) => c.set.id)).size; }
+
+function tomoGrupo({ href, titulo, sub, cartas, clave, busca, extra = "" }) {
+  const p = tomoProgreso(cartas, clave);
+  return `<div class="tomo" data-busca="${esc(normaliza(busca))}">` +
+    `<a href="${href}"><div class="fila">${imgCarta(portada(cartas))}` +
+    `<h3>${titulo}<small>${esc(sub)}</small></h3>` +
+    `<span class="cifra">${p.tengo}<span>/${p.de}</span></span></div>` +
+    `<div class="linea"><i style="width:${p.pct}%"></i></div></a>` +
+    conmutador(clave, p.master) + extra + `</div>`;
+}
+
+function filaPokemon(dex) {
+  const cartas = Cat.porDex.get(dex) || [];
+  const nombre = nombrePokemon(dex);
+  return tomoGrupo({ href: `#/pokemon/${dex}`, cartas, clave: "dex:" + dex,
+    titulo: `${esc(nombre)}<span class="dex">N.º ${dex}</span>`,
+    sub: `${cartas.length} cartas · ${nSets(cartas)} sets`, busca: `${nombre} ${dex}` });
+}
+
+function filaIlustrador(nombre) {
+  const cartas = Cat.porIlustrador.get(nombre) || [];
+  return tomoGrupo({ href: `#/ilustrador/${encodeURIComponent(nombre)}`, cartas, clave: "ilu:" + nombre,
+    titulo: esc(nombre), sub: `${cartas.length} cartas · ${nSets(cartas)} sets`, busca: nombre });
+}
+
+/* Al escribir en el buscador, además de filtrar los seguidos, enseña los
+ * demás que coinciden en tu catálogo. */
+function buscarOtros(q, todos, seguidos, fila) {
+  const zona = $("#otros");
+  if (!zona) return 0;
+  if (q.length < 2) { zona.innerHTML = ""; return 0; }
+  const hallados = todos.filter((x) => !seguidos.has(x.clave) && x.busca.includes(q)).slice(0, 20);
+  zona.innerHTML = hallados.length
+    ? `<h2>En tu catálogo</h2><p class="sub">Solo con las cartas que ya tienes en el catálogo.</p>` +
+      hallados.map((x) => fila(x.clave)).join("") : "";
+  return hallados.length;
+}
+
+function vistaListaPokemon() {
+  if (!Cat.listo) return vistaSinIndice();
+  const seguidos = new Set(Cat.pokemon.map((p) => p.dex));
+  const todos = [...Cat.porDex.keys()].sort((a, b) => a - b)
+    .map((d) => ({ clave: d, busca: normaliza(nombrePokemon(d) + " " + d) }));
+  $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("pokemon")}
+    ${buscador("Buscar un Pokémon o su número")}
+    ${Cat.pokemon.map((p) => filaPokemon(p.dex)).join("") ||
+      `<p class="vacio">Aún no sigues a ningún Pokémon. Busca arriba entre los de tu catálogo,
+       o tráete todas las cartas de uno desde el PC (mira abajo).</p>`}
+    <div id="otros"></div>
+    <p class="sinnada" id="sin-nada">Ningún Pokémon con ese nombre en tu catálogo.</p>
+    <p class="pie">Para tener <b>todas</b> las cartas de un Pokémon, de cualquier set y año, ejecuta en el PC
+    <code>python generar_indice.py --pokemon nombre</code> y vuelve a subir <code>indice.json</code>.</p></div>`;
+  alFiltrar = (q) => buscarOtros(q, todos, seguidos, filaPokemon);
+}
+
+function vistaListaIlustradores() {
+  if (!Cat.listo) return vistaSinIndice();
+  const seguidos = new Set(Cat.ilustradores);
+  const todos = [...Cat.porIlustrador.keys()].sort((a, b) => a.localeCompare(b, "es"))
+    .map((n) => ({ clave: n, busca: normaliza(n) }));
+  $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("ilustradores")}
+    ${buscador("Buscar un ilustrador")}
+    ${Cat.ilustradores.map(filaIlustrador).join("") ||
+      `<p class="vacio">Aún no sigues a ningún ilustrador. Busca arriba entre los de tu catálogo,
+       o tráete todas sus cartas desde el PC (mira abajo).</p>`}
+    <div id="otros"></div>
+    <p class="sinnada" id="sin-nada">Ningún ilustrador con ese nombre en tu catálogo.</p>
+    <p class="pie">Para tener <b>todas</b> las cartas de un ilustrador, ejecuta en el PC
+    <code>python generar_indice.py --ilustrador "Nombre Apellido"</code> y vuelve a subir <code>indice.json</code>.</p></div>`;
+  alFiltrar = (q) => buscarOtros(q, todos, seguidos, filaIlustrador);
+}
+
+/* --- Hojas de archivador: la de un set y la de un Pokémon o ilustrador -- */
+
+// Lo que se ve ahora en la hoja, para recontar al marcar una casilla.
+let Hoja = null;
+let ordenReciente = false;
+try { ordenReciente = localStorage.getItem("mipokedex.orden") === "reciente"; } catch (e) {}
+
+function pintarHoja(cartas, clave, conSet) {
+  const master = Guardado.esMaster(clave);
+  const huecos = [];
+  for (const c of cartas) {
+    const pie = conSet ? `${c.set.codigo || c.set.id} ${c.numero}` : c.numero;
+    if (master) for (const v of c.variantes) huecos.push(hueco(c, v, true, pie));
+    else huecos.push(hueco(c, null, false, pie));
+  }
+  Hoja = { cartas, clave };
+  return huecos.join("");
 }
 
 function vistaSet(id) {
@@ -645,32 +785,78 @@ function vistaSet(id) {
   const s = Cat.sets.find((x) => x.id === id);
   if (!s) { location.hash = "#/sets"; return; }
   const cartas = Cat.porSet.get(id) || [];
-  const master = Guardado.esMaster(id);
-  const huecos = [];
-  for (const c of cartas) {
-    if (master) for (const v of c.variantes) huecos.push(hueco(c, v, true));
-    else huecos.push(hueco(c, null, false));
-  }
-  const { tengo, de } = progreso(cartas, master);
+  const { tengo, de, master } = tomoProgreso(cartas, id);
   $("#vista").innerHTML = `<div class="pagina">
-    <a class="volver" href="#/sets">‹ Colección</a>
+    <a class="volver" href="#/sets">‹ Sets</a>
     <h1>${esc(s.nombre)}</h1>
     <div class="cabeza-set"><span class="cifra"><b id="cuenta">${tengo}</b><span>/${de}</span></span>
-    <label class="conm"><input type="checkbox" data-master="${esc(id)}"${master ? " checked" : ""}> Reverses aparte</label></div>
+    ${conmutador(id, master, "Reverses aparte")}</div>
     ${buscador("Buscar por nombre o número")}
-    <div class="hoja" data-set="${esc(id)}">${huecos.join("")}</div>
+    <div class="hoja">${pintarHoja(cartas, id, false)}</div>
     <p class="sinnada" id="sin-nada">Ninguna carta con ese nombre en este set.</p>
     <p class="pie">Toca una carta para marcarla. Mantén pulsado para ver su ficha.</p></div>`;
 }
 
+/* Cartas de varios sets. El catálogo ya viene ordenado por fecha de salida
+ * del set y número; "más recientes" invierte el orden de los sets pero
+ * mantiene el de las cartas dentro de cada uno. */
+function ordenar(cartas) {
+  const out = [...cartas];
+  if (ordenReciente) out.sort((a, b) => (b.set.i - a.set.i) || (a.i - b.i));
+  return out;
+}
+
+function vistaGrupo({ volver, volverTexto, titulo, cartas, clave, seguido, comando }) {
+  const lista = ordenar(cartas);
+  const { tengo, de, master } = tomoProgreso(lista, clave);
+  $("#vista").innerHTML = `<div class="pagina">
+    <a class="volver" href="${volver}">‹ ${volverTexto}</a>
+    <h1>${titulo}</h1>
+    <p class="sub">${cartas.length} cartas en ${nSets(cartas)} sets</p>
+    <div class="cabeza-set"><span class="cifra"><b id="cuenta">${tengo}</b><span>/${de}</span></span>
+    ${conmutador(clave, master, "Reverses aparte")}</div>
+    <div class="orden" role="group" aria-label="Orden">
+      <button type="button" data-accion="orden" data-v="antiguas"${ordenReciente ? "" : ' class="activo"'}>Más antiguas primero</button>
+      <button type="button" data-accion="orden" data-v="reciente"${ordenReciente ? ' class="activo"' : ""}>Más recientes primero</button>
+    </div>
+    ${buscador("Buscar por nombre, set o año")}
+    <div class="hoja">${pintarHoja(lista, clave, true)}</div>
+    <p class="sinnada" id="sin-nada">Ninguna carta con ese nombre.</p>
+    ${seguido ? "" : `<p class="pie">Solo salen las cartas de tu catálogo. Para tenerlas todas, ejecuta en el PC
+      <code>${esc(comando)}</code> y vuelve a subir <code>indice.json</code>.</p>`}
+    <p class="pie">Toca una carta para marcarla. Mantén pulsado para ver su ficha.</p></div>`;
+}
+
+function vistaPokemon(dex) {
+  if (!Cat.listo) return vistaSinIndice();
+  dex = Number(dex);
+  const cartas = Cat.porDex.get(dex);
+  if (!cartas) { location.hash = "#/pokemon"; return; }
+  const nombre = nombrePokemon(dex);
+  vistaGrupo({ volver: "#/pokemon", volverTexto: "Pokémon", cartas, clave: "dex:" + dex,
+    titulo: `${esc(nombre)}<span class="dex">N.º ${dex}</span>`,
+    seguido: Cat.pokemon.some((p) => p.dex === dex),
+    comando: `python generar_indice.py --pokemon ${normaliza(nombre).split(" ")[0]}` });
+}
+
+function vistaIlustrador(nombre) {
+  if (!Cat.listo) return vistaSinIndice();
+  const cartas = Cat.porIlustrador.get(nombre);
+  if (!cartas) { location.hash = "#/ilustradores"; return; }
+  vistaGrupo({ volver: "#/ilustradores", volverTexto: "Ilustradores", cartas, clave: "ilu:" + nombre,
+    titulo: esc(nombre), seguido: Cat.ilustradores.includes(nombre),
+    comando: `python generar_indice.py --ilustrador "${nombre}"` });
+}
+
 /* Casilla del archivador. variante null = la carta sin distinguir variantes. */
-function hueco(c, variante, conEtiqueta) {
+function hueco(c, variante, conEtiqueta, pie = c.numero) {
   const q = variante ? Guardado.cantidad(c.id, variante) : Guardado.total(c.id);
   const etiqueta = conEtiqueta && variante ? ETIQUETA_VARIANTE[variante] : "";
+  const busca = [c.nombre, c.numero, etiqueta, c.set.nombre, c.set.codigo, (c.set.fecha || "").slice(0, 4)].join(" ");
   return `<div class="hueco${q ? " mia" : ""}" role="button" tabindex="0" data-hueco="${esc(c.id)}"` +
-    ` data-var="${variante || ""}" data-busca="${esc(normaliza(c.nombre + " " + c.numero + " " + etiqueta))}"` +
+    ` data-var="${variante || ""}" data-pie="${esc(pie)}" data-busca="${esc(normaliza(busca))}"` +
     ` title="${esc(c.nombre)}">${imgCarta(c)}<span class="titulo">${esc(c.nombre)}</span>` +
-    (etiqueta ? `<em>${etiqueta}</em>` : "") + `<b>${esc(c.numero)}</b>` +
+    (etiqueta ? `<em>${etiqueta}</em>` : "") + `<b>${esc(pie)}</b>` +
     (q > 1 ? `<span class="num">×${q}</span>` : "") + `</div>`;
 }
 
@@ -695,15 +881,13 @@ function tocarHueco(el) {
     }
   }
   const nuevo = document.createElement("div");
-  nuevo.innerHTML = hueco(c, v || null, !!v);
+  nuevo.innerHTML = hueco(c, v || null, !!v, el.dataset.pie);
   const n = nuevo.firstChild;
+  n.style.display = el.style.display;
   el.replaceWith(n);
   if (n.classList.contains("mia")) n.classList.add("encaja");
-  const hoja = n.closest(".hoja");
-  if (hoja) {
-    const cartas = Cat.porSet.get(hoja.dataset.set) || [];
-    $("#cuenta").textContent = progreso(cartas, Guardado.esMaster(hoja.dataset.set)).tengo;
-  }
+  if (Hoja && $("#cuenta"))
+    $("#cuenta").textContent = progreso(Hoja.cartas, Guardado.esMaster(Hoja.clave)).tengo;
 }
 
 function abrirFichaPorCopias(c, q) {
@@ -722,7 +906,7 @@ function vistaCarta(id) {
   const dato = (et, val) => val ? `<div class="dato"><span>${et}</span><div>${val}</div></div>` : "";
   const otras = c.huella ? (Cat.porGrupo.get(c.grupo) || []).filter((x) => x.id !== c.id) : [];
   $("#vista").innerHTML = `<div class="pagina">
-    <a class="volver" href="#/set/${encodeURIComponent(c.set.id)}">‹ ${esc(c.set.nombre)}</a>
+    <button type="button" class="volver" data-accion="volver" data-href="#/set/${encodeURIComponent(c.set.id)}">‹ Volver</button>
     <div class="ficha">${imgCarta(c, "high", 'loading="eager"')}<div>
       <h1>${esc(c.nombre)}</h1><p class="de">${esc(c.set.nombre)}${c.set.fecha ? ", " + c.set.fecha.slice(0, 4) : ""}</p>
       <div style="margin-top:.7rem">${chipEstado(c)}</div></div></div>
@@ -732,8 +916,9 @@ function vistaCarta(id) {
       ${dato("Rareza", esc(c.rareza))}
       ${dato("Tipo", c.tipos.map((t) => `<span class="tipo">${esc(t)}</span>`).join(""))}
       ${dato("Puntos de salud", c.hp || "")}
-      ${dato("Pokédex", c.dex ? "N.º " + c.dex : "")}
-      ${dato("Ilustración", esc(c.ilustrador))}
+      ${dato("Pokédex", c.dexs.map((d) => `<a class="enlace" href="#/pokemon/${d}">N.º ${d} · ${esc(nombrePokemon(d))}</a>`).join("<br>"))}
+      ${dato("Ilustración", c.ilustrador ? `<a class="enlace" href="#/ilustrador/${encodeURIComponent(c.ilustrador)}">${esc(c.ilustrador)}</a>` : "")}
+      ${dato("Set", `<a class="enlace" href="#/set/${encodeURIComponent(c.set.id)}">${esc(c.set.nombre)}</a>`)}
       ${dato("Salida", esc(fechaLarga(c.set.fecha)))}
       ${dato("Reconocible", c.huella ? "Sí, con la cámara" : "No: TCGdex no tiene su imagen")}
     </div>
@@ -766,6 +951,8 @@ function vistaAjustes() {
         <dt>Cartas</dt><dd>${Cat.cartas.length}</dd>
         <dt>Reconocibles con la cámara</dt><dd>${Cat.reconocibles}</dd>
         <dt>Sets completos</dt><dd>${Cat.sets.filter((s) => s.completo).length}</dd>
+        <dt>Pokémon seguidos</dt><dd>${Cat.pokemon.length}</dd>
+        <dt>Ilustradores seguidos</dt><dd>${Cat.ilustradores.length}</dd>
         <dt>Generado</dt><dd>${esc(Cat.generado ? new Date(Cat.generado).toLocaleDateString("es-ES") : "?")}</dd></dl>`
       : `<p>Aún no hay catálogo.</p>`}
     </div>
@@ -844,14 +1031,22 @@ function vistaSinIndice() {
  * Navegación y eventos
  * ------------------------------------------------------------------- */
 
+let alFiltrar = null;   // la vista actual puede añadir resultados al buscar
+let pasos = 0;          // páginas visitadas dentro de la app, para "volver"
+
 function mostrar() {
-  const [, ruta = "escanear", arg] = (location.hash || "#/escanear").split("/");
-  const id = arg ? decodeURIComponent(arg) : null;
+  const [, ruta = "escanear", ...resto] = (location.hash || "#/escanear").split("/");
+  const id = resto.length ? decodeURIComponent(resto.join("/")) : null;
   if (ruta !== "escanear") Escaner.apagar();
-  const pestana = { escanear: "escanear", sets: "sets", set: "sets", carta: "sets", ajustes: "ajustes" }[ruta] || "escanear";
+  alFiltrar = null;
+  Hoja = null;
+  const pestana = { escanear: "escanear", ajustes: "ajustes" }[ruta] || "sets";
   for (const a of $$(".pestanas a")) a.classList.toggle("aqui", a.dataset.pestana === pestana);
   if (ruta === "sets") vistaSets();
   else if (ruta === "set") vistaSet(id);
+  else if (ruta === "pokemon") id ? vistaPokemon(id) : vistaListaPokemon();
+  else if (ruta === "ilustradores") vistaListaIlustradores();
+  else if (ruta === "ilustrador") vistaIlustrador(id);
   else if (ruta === "carta") vistaCarta(id);
   else if (ruta === "ajustes") vistaAjustes();
   else vistaEscaner();
@@ -877,6 +1072,14 @@ document.addEventListener("click", (e) => {
     }
     else if (acc === "exportar") exportar();
     else if (acc === "borrar") borrarTodo();
+    else if (acc === "volver") {
+      if (pasos > 0) history.back(); else location.hash = b.dataset.href;
+    }
+    else if (acc === "orden") {
+      ordenReciente = b.dataset.v === "reciente";
+      try { localStorage.setItem("mipokedex.orden", ordenReciente ? "reciente" : "antiguas"); } catch (err) {}
+      mostrar();
+    }
     return;
   }
   const h = e.target.closest("[data-hueco]");
@@ -905,10 +1108,12 @@ document.addEventListener("input", (e) => {
   const q = normaliza(e.target.value.trim());
   let n = 0;
   for (const el of $$("[data-busca]")) {
+    if (el.closest("#otros")) continue;
     const si = !q || el.dataset.busca.includes(q);
     el.style.display = si ? "" : "none";
     if (si) n++;
   }
+  if (alFiltrar) n += alFiltrar(q);
   const v = $("#sin-nada");
   if (v) v.style.display = n ? "none" : "block";
 });
@@ -944,12 +1149,20 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && Escaner.activo) Escaner.bucle();
 });
 window.addEventListener("resize", () => Escaner.dimensionar());
-window.addEventListener("hashchange", mostrar);
+window.addEventListener("hashchange", () => { pasos++; mostrar(); });
 
 (async function arrancar() {
   $("#vista").innerHTML = `<div class="pagina"><p class="vacio">Cargando el catálogo…</p></div>`;
   await cargarIndice();
   mostrar();
-  if ("serviceWorker" in navigator && location.protocol !== "file:")
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+  // Probando en el PC (localhost) no se guarda nada: así cada cambio en los
+  // ficheros se ve al recargar. Además se borra lo que hubiera guardado.
+  if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+    navigator.serviceWorker.getRegistrations()
+      .then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+    if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+    return;
+  }
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
