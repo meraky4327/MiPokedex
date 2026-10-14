@@ -2,8 +2,8 @@
  * cobertura. Si cambias algun fichero de la app, sube VERSION para que los
  * moviles descarguen la nueva. El catalogo (indice.json) no hace falta: se
  * pide siempre a la red primero y solo se usa la copia guardada sin conexion. */
-const VERSION = "mipokedex-3";
-const APP = ["./", "index.html", "estilos.css", "app.js", "hash.js", "reconocer.js",
+const VERSION = "mipokedex-4";
+const APP = ["./", "index.html", "estilos.css", "app.js", "mazos.js", "hash.js", "reconocer.js",
              "trabajador.js", "manifest.webmanifest", "iconos/icono.svg",
              "iconos/icono-192.png", "iconos/icono-512.png"];
 

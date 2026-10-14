@@ -56,7 +56,7 @@ function hace(iso) {
 
 const Guardado = (() => {
   const CLAVE = "mipokedex.v1";
-  let d = { coleccion: {}, master: [], copia: null, cambios: 0 };
+  let d = { coleccion: {}, master: [], mazos: [], copia: null, cambios: 0 };
   try {
     const t = localStorage.getItem(CLAVE);
     if (t) d = Object.assign(d, JSON.parse(t));
@@ -106,7 +106,7 @@ const Guardado = (() => {
       d.cambios = 0;
       guardar();
       return { tipo: "pokedex-coleccion", v: 1, fecha: d.copia,
-               coleccion: d.coleccion, master: d.master };
+               coleccion: d.coleccion, master: d.master, mazos: d.mazos };
     },
     importar(datos, modo) {
       const nueva = modo === "reemplazar" ? {} : JSON.parse(JSON.stringify(d.coleccion));
@@ -121,11 +121,27 @@ const Guardado = (() => {
         }
       d.coleccion = nueva;
       d.master = [...new Set([...(modo === "reemplazar" ? [] : d.master), ...(datos.master || [])])];
+      // Copias antiguas no traen mazos: entonces se conservan los de aquí.
+      if (Array.isArray(datos.mazos)) {
+        const ya = new Set(d.mazos.map((m) => m.id));
+        d.mazos = modo === "reemplazar" ? datos.mazos
+          : [...d.mazos, ...datos.mazos.filter((m) => !ya.has(m.id))];
+      }
       d.cambios++;
       guardar();
       return copias;
     },
     borrar() { d.coleccion = {}; d.cambios++; guardar(); },
+    // Mazos: cada uno con su propia cuenta, independiente de la colección.
+    get mazos() { return d.mazos; },
+    mazo: (id) => d.mazos.find((m) => m.id === id),
+    guardarMazo(m) {
+      const i = d.mazos.findIndex((x) => x.id === m.id);
+      if (i >= 0) d.mazos[i] = m; else d.mazos.push(m);
+      d.cambios++;
+      guardar();
+    },
+    borrarMazo(id) { d.mazos = d.mazos.filter((m) => m.id !== id); d.cambios++; guardar(); },
     get copia() { return d.copia; },
     get cambios() { return d.cambios; },
     get todo() { return d.coleccion; },
@@ -138,7 +154,7 @@ const Guardado = (() => {
 
 const Cat = { listo: false, error: null, sets: [], cartas: [], porId: new Map(),
               porSet: new Map(), porGrupo: new Map(), generado: null, reconocibles: 0,
-              porDex: new Map(), porIlustrador: new Map(), pokemon: [], ilustradores: [] };
+              porDex: new Map(), porIlustrador: new Map(), pokemon: [], ilustradores: [], codigos: {} };
 
 async function cargarIndice() {
   let datos;
@@ -182,6 +198,7 @@ async function cargarIndice() {
       Cat.porIlustrador.get(c.ilustrador).push(c);
     }
   }
+  Cat.codigos = datos.codigos || {};
   Cat.pokemon = (datos.pokemon || []).filter((p) => Cat.porDex.has(p.dex));
   Cat.ilustradores = (datos.ilustradores || []).filter((n) => Cat.porIlustrador.has(n));
   Cat.reconocibles = Cat.cartas.filter((c) => c.huella).length;
@@ -959,7 +976,7 @@ function vistaAjustes() {
     <div class="bloque"><h3>Instalar en el móvil</h3>
       <p>Para abrirla como una app más, sin barra del navegador: en Android, menú ⋮ → <b>Añadir a pantalla de inicio</b>.
       En iPhone, botón Compartir → <b>Añadir a pantalla de inicio</b>.</p></div>
-    <div class="bloque"><h3>Empezar de cero</h3><p>Borra todas tus marcas en este móvil. El catálogo no se toca.</p>
+    <div class="bloque"><h3>Empezar de cero</h3><p>Borra todas tus marcas en este móvil. El catálogo y los mazos no se tocan.</p>
       <div class="botones"><button type="button" class="boton peligro" data-accion="borrar">Borrar mi colección</button></div></div>
     <p class="pie">Mi Pokédex · datos de cartas de TCGdex</p></div>`;
   $("#importar").addEventListener("change", importar);
@@ -990,9 +1007,10 @@ async function importar(e) {
   }
   if (datos.tipo !== "pokedex-coleccion") return aviso("Ese archivo no es una copia de Mi Pokédex.");
   const n = Object.keys(datos.coleccion || {}).length;
-  const hayAlgo = Object.keys(Guardado.todo).length > 0;
+  const nm = (datos.mazos || []).length;
+  const hayAlgo = Object.keys(Guardado.todo).length > 0 || Guardado.mazos.length > 0;
   const modo = hayAlgo ? await dialogo("Recuperar copia",
-    `La copia tiene ${n} cartas distintas. ¿Qué hago con lo que ya tienes marcado aquí?`,
+    `La copia tiene ${n} cartas distintas${nm ? ` y ${nm} mazos` : ""}. ¿Qué hago con lo que ya tienes aquí?`,
     [{ texto: "Sustituirlo por la copia", valor: "reemplazar", clase: "pri" },
      { texto: "Sumar la copia a lo que hay", valor: "sumar" },
      { texto: "Cancelar", valor: null }]) : "reemplazar";
@@ -1040,7 +1058,7 @@ function mostrar() {
   if (ruta !== "escanear") Escaner.apagar();
   alFiltrar = null;
   Hoja = null;
-  const pestana = { escanear: "escanear", ajustes: "ajustes" }[ruta] || "sets";
+  const pestana = { escanear: "escanear", ajustes: "ajustes", mazos: "mazos", mazo: "mazos" }[ruta] || "sets";
   for (const a of $$(".pestanas a")) a.classList.toggle("aqui", a.dataset.pestana === pestana);
   if (ruta === "sets") vistaSets();
   else if (ruta === "set") vistaSet(id);
@@ -1048,6 +1066,8 @@ function mostrar() {
   else if (ruta === "ilustradores") vistaListaIlustradores();
   else if (ruta === "ilustrador") vistaIlustrador(id);
   else if (ruta === "carta") vistaCarta(id);
+  else if (ruta === "mazos") id === "nuevo" ? vistaNuevoMazo() : vistaMazos();
+  else if (ruta === "mazo") vistaMazo(id);
   else if (ruta === "ajustes") vistaAjustes();
   else vistaEscaner();
   if (ruta !== "escanear") window.scrollTo(0, 0);

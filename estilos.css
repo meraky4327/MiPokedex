@@ -230,3 +230,45 @@ h1 .dex{font-size:.8rem}
 .orden button.activo{background:var(--oro);color:var(--oro-tinta);border-color:var(--oro)}
 button.volver{background:none;border:0;padding:0;cursor:pointer}
 .enlace{color:var(--oro)}
+
+/* ---------- mazos ---------- */
+.boton.ancho{display:block;width:100%;margin:0 0 1.1rem}
+.campo{display:block;margin:0 0 .9rem}
+.campo span{display:block;font:500 .8rem/1 Outfit,sans-serif;color:var(--humo);margin:0 0 .4rem}
+.campo input,.campo textarea{width:100%;color:var(--tinta);background:var(--carpeta);
+  border:1px solid var(--anilla);border-radius:var(--r);padding:.7rem .85rem;
+  font:400 .95rem/1.45 "IBM Plex Sans",system-ui,sans-serif;-webkit-appearance:none;appearance:none}
+.campo textarea{font:400 .85rem/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical;min-height:12rem}
+.campo input:focus,.campo textarea:focus{border-color:var(--oro);outline:none}
+.campo ::placeholder{color:var(--humo);opacity:.7}
+.aviso-malas{background:rgba(217,84,77,.1);border:1px solid rgba(217,84,77,.35);border-radius:var(--r);
+  padding:.7rem .85rem;margin:0 0 1rem;font-size:.85rem}
+.aviso-malas ul{margin:.4rem 0;padding-left:1.1rem;color:var(--humo)}
+.aviso-malas li{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;word-break:break-word}
+.aviso-malas small{color:var(--humo)}
+.seccion-mazo{display:flex;justify-content:space-between;align-items:baseline;margin:1.4rem 0 .6rem}
+.seccion-mazo span{font:600 .85rem/1 Outfit,sans-serif;color:var(--humo)}
+.carta-mazo{display:flex;align-items:center;gap:.75rem;background:var(--carpeta);border:1px solid var(--anilla);
+  border-radius:var(--r);padding:.45rem .55rem .45rem .45rem;margin-bottom:.45rem}
+.carta-mazo[hidden]{display:none}
+.carta-mazo.completa{border-color:var(--oro)}
+.carta-mazo .mini{flex:none;width:44px;aspect-ratio:63/88;border-radius:5px;overflow:hidden;
+  background:var(--anilla);border:0;padding:0;cursor:pointer}
+.carta-mazo .mini img{width:100%;height:100%;object-fit:cover;display:block}
+.carta-mazo .txt{flex:1;min-width:0}
+.carta-mazo .txt b{display:block;font-weight:500;font-size:.92rem;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carta-mazo .txt small{color:var(--humo);font-size:.75rem}
+.contador{display:flex;align-items:center;gap:.2rem;flex:none}
+.contador button{width:40px;height:40px;border-radius:10px;border:1px solid var(--anilla-clara);
+  background:transparent;font:600 1.15rem/1 Outfit,sans-serif;cursor:pointer}
+.contador button:disabled{opacity:.3}
+.contador span{min-width:3.1rem;text-align:center;font:500 .9rem/1 Outfit,sans-serif;color:var(--humo)}
+.contador span b{color:var(--tinta);font-size:1.1rem}
+.carta-mazo.completa .contador span b{color:var(--oro)}
+.velo.centrado{align-items:center}
+.carta-grande{margin:0;max-width:min(88vw,380px);text-align:center}
+.carta-grande img{width:100%;border-radius:14px;display:block;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+.carta-grande figcaption{margin-top:.7rem;color:var(--tinta);font:500 .9rem/1.3 Outfit,sans-serif}
+.sin-imagen{aspect-ratio:63/88;display:flex;align-items:center;justify-content:center;border-radius:14px;
+  background:var(--carpeta);color:var(--humo);padding:1rem}
