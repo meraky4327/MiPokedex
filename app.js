@@ -1,4 +1,4 @@
-/* Mi Pokédex: escanear cartas y llevar la colección, todo en el móvil.
+/* MiPokedex: escanear cartas y llevar la colección, todo en el móvil.
  *
  * No hay servidor. El catálogo (indice.json) se genera en el PC con
  * generar_indice.py y se publica junto a esta página. Tu colección vive en
@@ -56,7 +56,7 @@ function hace(iso) {
 
 const Guardado = (() => {
   const CLAVE = "mipokedex.v1";
-  let d = { coleccion: {}, master: [], mazos: [], copia: null, cambios: 0 };
+  let d = { coleccion: {}, master: [], mazos: [], ocultos: [], copia: null, cambios: 0 };
   try {
     const t = localStorage.getItem(CLAVE);
     if (t) d = Object.assign(d, JSON.parse(t));
@@ -106,7 +106,7 @@ const Guardado = (() => {
       d.cambios = 0;
       guardar();
       return { tipo: "pokedex-coleccion", v: 1, fecha: d.copia,
-               coleccion: d.coleccion, master: d.master, mazos: d.mazos };
+               coleccion: d.coleccion, master: d.master, mazos: d.mazos, ocultos: d.ocultos };
     },
     importar(datos, modo) {
       const nueva = modo === "reemplazar" ? {} : JSON.parse(JSON.stringify(d.coleccion));
@@ -121,6 +121,8 @@ const Guardado = (() => {
         }
       d.coleccion = nueva;
       d.master = [...new Set([...(modo === "reemplazar" ? [] : d.master), ...(datos.master || [])])];
+      if (Array.isArray(datos.ocultos))
+        d.ocultos = [...new Set([...(modo === "reemplazar" ? [] : d.ocultos), ...datos.ocultos])];
       // Copias antiguas no traen mazos: entonces se conservan los de aquí.
       if (Array.isArray(datos.mazos)) {
         const ya = new Set(d.mazos.map((m) => m.id));
@@ -142,6 +144,16 @@ const Guardado = (() => {
       guardar();
     },
     borrarMazo(id) { d.mazos = d.mazos.filter((m) => m.id !== id); d.cambios++; guardar(); },
+    // Sets, Pokémon e ilustradores quitados de la lista con la papelera.
+    // Claves: "set:sv08", "dex:248", "ilu:Mitsuhiro Arita".
+    oculto: (clave) => d.ocultos.includes(clave),
+    get ocultos() { return d.ocultos; },
+    ocultar(clave, si) {
+      d.ocultos = d.ocultos.filter((x) => x !== clave);
+      if (si) d.ocultos.push(clave);
+      d.cambios++;
+      guardar();
+    },
     get copia() { return d.copia; },
     get cambios() { return d.cambios; },
     get todo() { return d.coleccion; },
@@ -635,6 +647,63 @@ function vistaEscaner() {
 }
 
 /* ---------------------------------------------------------------------
+ * Inicio
+ * ------------------------------------------------------------------- */
+
+const ICONO = {
+  escanear: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="8.5" y="7" width="7" height="10" rx="1"/>',
+  coleccion: '<rect x="3" y="4" width="5" height="7" rx="1"/><rect x="9.5" y="4" width="5" height="7" rx="1"/><rect x="16" y="4" width="5" height="7" rx="1"/><rect x="3" y="13" width="5" height="7" rx="1"/><rect x="9.5" y="13" width="5" height="7" rx="1"/><rect x="16" y="13" width="5" height="7" rx="1"/>',
+  mazos: '<rect x="7" y="3" width="11" height="15" rx="1.5"/><path d="M5 6.5v12A2.5 2.5 0 0 0 7.5 21H15"/>',
+  ajustes: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+  flecha: '<path d="M9 6l6 6-6 6"/>',
+};
+const svgIcono = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONO[n]}</svg>`;
+
+/* Cada letra en su <span> para que el título ondee letra a letra. */
+function letras(texto, clase, desde = 0) {
+  return [...texto].map((l, i) =>
+    `<span class="letra ${clase}" style="--i:${desde + i}" aria-hidden="true">${esc(l)}</span>`).join("");
+}
+
+function vistaInicio() {
+  const distintas = Object.keys(Guardado.todo).filter((id) => Guardado.total(id) > 0).length;
+  const mazos = Guardado.mazos;
+  const sinCopia = Guardado.cambios > 0 && distintas > 0;
+  const nSets = Cat.listo ? Cat.sets.filter((s) => s.completo && !Guardado.oculto("set:" + s.id)).length : 0;
+
+  $("#vista").innerHTML = `<div class="pagina inicio">
+    <header class="inicio-cabeza">
+      <div class="flota"><img src="iconos/icono.svg" alt="" width="112" height="112"></div>
+      <span class="flota-sombra" aria-hidden="true"></span>
+      <h1 class="marca-grande" aria-label="MiPokedex">${letras("Mi", "")}${letras("Pokedex", "acento", 2)}</h1>
+    </header>
+
+    <div class="inicio-bloque">
+    <div class="resumen">
+      <div><b>${distintas}</b><span>${distintas === 1 ? "carta tuya" : "cartas tuyas"}</span></div>
+      <div><b>${nSets}</b><span>${nSets === 1 ? "set" : "sets"}</span></div>
+      <div><b>${mazos.length}</b><span>${mazos.length === 1 ? "mazo" : "mazos"}</span></div>
+    </div>
+
+    <a class="accion-grande" href="#/escanear">
+      <span class="accion-icono">${svgIcono("escanear")}</span>
+      <span><b>Escanear una carta</b><small>Apunta con la cámara y te dice si la tienes</small></span>
+      ${svgIcono("flecha")}
+    </a>
+
+    <div class="accesos">
+      <a class="acceso" href="#/sets">${svgIcono("coleccion")}<b>Mi colección</b><small>Sets, Pokémon e ilustradores</small></a>
+      <a class="acceso" href="#/mazos">${svgIcono("mazos")}<b>Mazos</b><small>${mazos.length ? `${mazos.length} en marcha` : "Pega una lista y llévala al día"}</small></a>
+    </div>
+    </div>
+
+    ${sinCopia ? `<a class="aviso-copia" href="#/ajustes">${svgIcono("ajustes")}<span><b>Tienes cambios sin copia de seguridad</b>
+      <small>${Guardado.copia ? "Última copia " + hace(Guardado.copia) : "Aún no has hecho ninguna"}. Guárdala en Ajustes.</small></span></a>` : ""}
+    ${!Cat.listo && Cat.error === "sin-indice" ? `<p class="pie">Aún no hay catálogo: crea <code>indice.json</code> con el generador para poder escanear y ver tus sets.</p>` : ""}
+  </div>`;
+}
+
+/* ---------------------------------------------------------------------
  * Colección
  * ------------------------------------------------------------------- */
 
@@ -652,6 +721,27 @@ function tomoProgreso(cartas, claveMaster) {
   return { master, tengo, de, pct: de ? (100 * tengo / de).toFixed(1) : 0 };
 }
 
+const PAPELERA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14"/><path d="M10 10v7M14 10v7"/></svg>';
+
+/* Fila de abajo de cada tomo: el interruptor de variantes y la papelera. */
+function accionesTomo(claveMaster, master, claveOculto, nombre) {
+  return `<div class="acciones">${conmutador(claveMaster, master)}` +
+    (claveOculto ? `<button type="button" class="tirar" data-accion="ocultar" data-clave="${esc(claveOculto)}" ` +
+      `data-nombre="${esc(nombre)}" title="Quitar de la lista" aria-label="Quitar ${esc(nombre)} de la lista">${PAPELERA}</button>` : "") +
+    `</div>`;
+}
+
+/* Lo que has quitado de una lista, plegado al final, para poder recuperarlo. */
+function listaOcultos(prefijo, nombreDe, que) {
+  const ocultos = Guardado.ocultos.filter((k) => k.startsWith(prefijo))
+    .map((k) => ({ clave: k, nombre: nombreDe(k.slice(prefijo.length)) })).filter((x) => x.nombre);
+  if (!ocultos.length) return "";
+  return `<details class="ocultos"><summary>${ocultos.length} ${que} quitado${ocultos.length > 1 ? "s" : ""} de la lista</summary>` +
+    ocultos.map((x) => `<div class="oculto"><span>${esc(x.nombre)}</span>` +
+      `<button type="button" class="boton" data-accion="desocultar" data-clave="${esc(x.clave)}">Volver a mostrar</button></div>`).join("") +
+    `</details>`;
+}
+
 function conmutador(clave, master, texto = "Contar reverses y holos aparte") {
   return `<label class="conm"><input type="checkbox" data-master="${esc(clave)}"${master ? " checked" : ""}> ${texto}</label>`;
 }
@@ -662,7 +752,7 @@ function vistaSets() {
   const copias = Object.keys(Guardado.todo).reduce((s, id) => s + Guardado.total(id), 0);
   // Solo los sets que sigues enteros. Las cartas sueltas (de seguir un
   // Pokémon o un ilustrador) se ven en sus pestañas.
-  const completos = Cat.sets.filter((s) => s.completo);
+  const completos = Cat.sets.filter((s) => s.completo && !Guardado.oculto("set:" + s.id));
 
   const tomo = (s) => {
     const cartas = Cat.porSet.get(s.id) || [];
@@ -674,7 +764,7 @@ function vistaSets() {
       `<small>${esc([s.serie, s.fecha && s.fecha.slice(0, 4)].filter(Boolean).join(" · "))}</small></h3>` +
       `<span class="cifra">${p.tengo}<span>/${p.de}</span></span></div>` +
       `<div class="linea"><i style="width:${p.pct}%"></i></div>${nota}</a>` +
-      conmutador(s.id, p.master) + `</div>`;
+      accionesTomo(s.id, p.master, "set:" + s.id, s.nombre) + `</div>`;
   };
 
   $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("sets")}
@@ -683,6 +773,7 @@ function vistaSets() {
     ${completos.length ? buscador("Buscar un set") : ""}
     ${completos.map(tomo).reverse().join("") || `<p class="vacio">Aún no sigues ningún set entero.</p>`}
     <p class="sinnada" id="sin-nada">Ningún set con ese nombre.</p>
+    ${listaOcultos("set:", (id) => (Cat.sets.find((s) => s.id === id && s.completo) || {}).nombre, "set")}
     <p class="pie">Para añadir sets, ejecuta en el PC <code>python generar_indice.py --sets ID</code> y vuelve a publicar la carpeta app.</p></div>`;
 }
 
@@ -707,27 +798,27 @@ function portada(cartas) {
 
 function nSets(cartas) { return new Set(cartas.map((c) => c.set.id)).size; }
 
-function tomoGrupo({ href, titulo, sub, cartas, clave, busca, extra = "" }) {
+function tomoGrupo({ href, titulo, sub, cartas, clave, busca, quitar, nombre }) {
   const p = tomoProgreso(cartas, clave);
   return `<div class="tomo" data-busca="${esc(normaliza(busca))}">` +
     `<a href="${href}"><div class="fila">${imgCarta(portada(cartas))}` +
     `<h3>${titulo}<small>${esc(sub)}</small></h3>` +
     `<span class="cifra">${p.tengo}<span>/${p.de}</span></span></div>` +
     `<div class="linea"><i style="width:${p.pct}%"></i></div></a>` +
-    conmutador(clave, p.master) + extra + `</div>`;
+    accionesTomo(clave, p.master, quitar ? clave : null, nombre) + `</div>`;
 }
 
-function filaPokemon(dex) {
+function filaPokemon(dex, quitar = false) {
   const cartas = Cat.porDex.get(dex) || [];
   const nombre = nombrePokemon(dex);
-  return tomoGrupo({ href: `#/pokemon/${dex}`, cartas, clave: "dex:" + dex,
+  return tomoGrupo({ href: `#/pokemon/${dex}`, cartas, clave: "dex:" + dex, quitar, nombre,
     titulo: `${esc(nombre)}<span class="dex">N.º ${dex}</span>`,
     sub: `${cartas.length} cartas · ${nSets(cartas)} sets`, busca: `${nombre} ${dex}` });
 }
 
-function filaIlustrador(nombre) {
+function filaIlustrador(nombre, quitar = false) {
   const cartas = Cat.porIlustrador.get(nombre) || [];
-  return tomoGrupo({ href: `#/ilustrador/${encodeURIComponent(nombre)}`, cartas, clave: "ilu:" + nombre,
+  return tomoGrupo({ href: `#/ilustrador/${encodeURIComponent(nombre)}`, cartas, clave: "ilu:" + nombre, quitar, nombre,
     titulo: esc(nombre), sub: `${cartas.length} cartas · ${nSets(cartas)} sets`, busca: nombre });
 }
 
@@ -740,22 +831,24 @@ function buscarOtros(q, todos, seguidos, fila) {
   const hallados = todos.filter((x) => !seguidos.has(x.clave) && x.busca.includes(q)).slice(0, 20);
   zona.innerHTML = hallados.length
     ? `<h2>En tu catálogo</h2><p class="sub">Solo con las cartas que ya tienes en el catálogo.</p>` +
-      hallados.map((x) => fila(x.clave)).join("") : "";
+      hallados.map((x) => fila(x.clave, false)).join("") : "";
   return hallados.length;
 }
 
 function vistaListaPokemon() {
   if (!Cat.listo) return vistaSinIndice();
-  const seguidos = new Set(Cat.pokemon.map((p) => p.dex));
+  const lista = Cat.pokemon.filter((p) => !Guardado.oculto("dex:" + p.dex));
+  const seguidos = new Set(lista.map((p) => p.dex));
   const todos = [...Cat.porDex.keys()].sort((a, b) => a - b)
     .map((d) => ({ clave: d, busca: normaliza(nombrePokemon(d) + " " + d) }));
   $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("pokemon")}
     ${buscador("Buscar un Pokémon o su número")}
-    ${Cat.pokemon.map((p) => filaPokemon(p.dex)).join("") ||
+    ${lista.map((p) => filaPokemon(p.dex, true)).join("") ||
       `<p class="vacio">Aún no sigues a ningún Pokémon. Busca arriba entre los de tu catálogo,
        o tráete todas las cartas de uno desde el PC (mira abajo).</p>`}
     <div id="otros"></div>
     <p class="sinnada" id="sin-nada">Ningún Pokémon con ese nombre en tu catálogo.</p>
+    ${listaOcultos("dex:", (d) => Cat.porDex.has(+d) ? nombrePokemon(+d) : "", "Pokémon")}
     <p class="pie">Para tener <b>todas</b> las cartas de un Pokémon, de cualquier set y año, ejecuta en el PC
     <code>python generar_indice.py --pokemon nombre</code> y vuelve a subir <code>indice.json</code>.</p></div>`;
   alFiltrar = (q) => buscarOtros(q, todos, seguidos, filaPokemon);
@@ -763,16 +856,18 @@ function vistaListaPokemon() {
 
 function vistaListaIlustradores() {
   if (!Cat.listo) return vistaSinIndice();
-  const seguidos = new Set(Cat.ilustradores);
+  const lista = Cat.ilustradores.filter((n) => !Guardado.oculto("ilu:" + n));
+  const seguidos = new Set(lista);
   const todos = [...Cat.porIlustrador.keys()].sort((a, b) => a.localeCompare(b, "es"))
     .map((n) => ({ clave: n, busca: normaliza(n) }));
   $("#vista").innerHTML = `<div class="pagina"><h1>Tu colección</h1>${segmento("ilustradores")}
     ${buscador("Buscar un ilustrador")}
-    ${Cat.ilustradores.map(filaIlustrador).join("") ||
+    ${lista.map((n) => filaIlustrador(n, true)).join("") ||
       `<p class="vacio">Aún no sigues a ningún ilustrador. Busca arriba entre los de tu catálogo,
        o tráete todas sus cartas desde el PC (mira abajo).</p>`}
     <div id="otros"></div>
     <p class="sinnada" id="sin-nada">Ningún ilustrador con ese nombre en tu catálogo.</p>
+    ${listaOcultos("ilu:", (n) => Cat.porIlustrador.has(n) ? n : "", "ilustrador")}
     <p class="pie">Para tener <b>todas</b> las cartas de un ilustrador, ejecuta en el PC
     <code>python generar_indice.py --ilustrador "Nombre Apellido"</code> y vuelve a subir <code>indice.json</code>.</p></div>`;
   alFiltrar = (q) => buscarOtros(q, todos, seguidos, filaIlustrador);
@@ -907,6 +1002,17 @@ function tocarHueco(el) {
     $("#cuenta").textContent = progreso(Hoja.cartas, Guardado.esMaster(Hoja.clave)).tengo;
 }
 
+async function quitarDeLista(clave, nombre) {
+  const si = await dialogo(`¿Quitar «${nombre}» de la lista?`,
+    "Deja de aparecer aquí, pero tus cartas marcadas se conservan. Si te equivocas, " +
+    "lo recuperas al final de la lista, en «quitados de la lista».",
+    [{ texto: "Sí, quitarlo", valor: true, clase: "peligro" }, { texto: "Cancelar", valor: false }]);
+  if (!si) return;
+  Guardado.ocultar(clave, true);
+  aviso(`«${nombre}» quitado de la lista`);
+  mostrar();
+}
+
 function abrirFichaPorCopias(c, q) {
   aviso(`Tienes ${q}: ajústalas en la ficha`);
   location.hash = "#/carta/" + encodeURIComponent(c.id);
@@ -978,7 +1084,7 @@ function vistaAjustes() {
       En iPhone, botón Compartir → <b>Añadir a pantalla de inicio</b>.</p></div>
     <div class="bloque"><h3>Empezar de cero</h3><p>Borra todas tus marcas en este móvil. El catálogo y los mazos no se tocan.</p>
       <div class="botones"><button type="button" class="boton peligro" data-accion="borrar">Borrar mi colección</button></div></div>
-    <p class="pie">Mi Pokédex · datos de cartas de TCGdex</p></div>`;
+    <p class="pie">MiPokedex · datos de cartas de TCGdex</p></div>`;
   $("#importar").addEventListener("change", importar);
 }
 
@@ -1003,9 +1109,9 @@ async function importar(e) {
   try {
     datos = JSON.parse(await f.text());
   } catch (err) {
-    return aviso("Ese archivo no es una copia de Mi Pokédex.");
+    return aviso("Ese archivo no es una copia de MiPokedex.");
   }
-  if (datos.tipo !== "pokedex-coleccion") return aviso("Ese archivo no es una copia de Mi Pokédex.");
+  if (datos.tipo !== "pokedex-coleccion") return aviso("Ese archivo no es una copia de MiPokedex.");
   const n = Object.keys(datos.coleccion || {}).length;
   const nm = (datos.mazos || []).length;
   const hayAlgo = Object.keys(Guardado.todo).length > 0 || Guardado.mazos.length > 0;
@@ -1053,12 +1159,18 @@ let alFiltrar = null;   // la vista actual puede añadir resultados al buscar
 let pasos = 0;          // páginas visitadas dentro de la app, para "volver"
 
 function mostrar() {
-  const [, ruta = "escanear", ...resto] = (location.hash || "#/escanear").split("/");
+  const [, ruta = "inicio", ...resto] = (location.hash || "#/inicio").split("/");
   const id = resto.length ? decodeURIComponent(resto.join("/")) : null;
   if (ruta !== "escanear") Escaner.apagar();
   alFiltrar = null;
   Hoja = null;
-  const pestana = { escanear: "escanear", ajustes: "ajustes", mazos: "mazos", mazo: "mazos" }[ruta] || "sets";
+  // El inicio va sobre rojo; la barra del sistema del móvil acompaña al fondo.
+  const enInicio = !["escanear", "sets", "set", "pokemon", "ilustradores", "ilustrador", "carta",
+                     "mazos", "mazo", "ajustes"].includes(ruta);
+  document.body.classList.toggle("en-inicio", enInicio);
+  const tema = document.querySelector('meta[name="theme-color"]');
+  if (tema) tema.content = enInicio ? "#E23B32" : "#FFF4DC";
+  const pestana = { inicio: "inicio", escanear: "escanear", ajustes: "ajustes", mazos: "mazos", mazo: "mazos" }[ruta] || "sets";
   for (const a of $$(".pestanas a")) a.classList.toggle("aqui", a.dataset.pestana === pestana);
   if (ruta === "sets") vistaSets();
   else if (ruta === "set") vistaSet(id);
@@ -1069,7 +1181,8 @@ function mostrar() {
   else if (ruta === "mazos") id === "nuevo" ? vistaNuevoMazo() : vistaMazos();
   else if (ruta === "mazo") vistaMazo(id);
   else if (ruta === "ajustes") vistaAjustes();
-  else vistaEscaner();
+  else if (ruta === "escanear") vistaEscaner();
+  else vistaInicio();
   if (ruta !== "escanear") window.scrollTo(0, 0);
 }
 
@@ -1092,6 +1205,12 @@ document.addEventListener("click", (e) => {
     }
     else if (acc === "exportar") exportar();
     else if (acc === "borrar") borrarTodo();
+    else if (acc === "ocultar") quitarDeLista(b.dataset.clave, b.dataset.nombre);
+    else if (acc === "desocultar") {
+      Guardado.ocultar(b.dataset.clave, false);
+      aviso("Vuelve a estar en la lista");
+      mostrar();
+    }
     else if (acc === "volver") {
       if (pasos > 0) history.back(); else location.hash = b.dataset.href;
     }
@@ -1172,9 +1291,15 @@ window.addEventListener("resize", () => Escaner.dimensionar());
 window.addEventListener("hashchange", () => { pasos++; mostrar(); });
 
 (async function arrancar() {
-  $("#vista").innerHTML = `<div class="pagina"><p class="vacio">Cargando el catálogo…</p></div>`;
-  await cargarIndice();
+  // La presentación se ve al menos un momento, aunque el catálogo cargue enseguida.
+  const minimo = new Promise((r) => setTimeout(r, 900));
+  await Promise.all([cargarIndice(), minimo]);
   mostrar();
+  const p = $("#presentacion");
+  if (p) {
+    p.classList.add("fuera");
+    setTimeout(() => p.remove(), 450);
+  }
   if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
   // Probando en el PC (localhost) no se guarda nada: así cada cambio en los
   // ficheros se ve al recargar. Además se borra lo que hubiera guardado.
