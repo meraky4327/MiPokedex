@@ -1,7 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#171C2F"/>
-  <rect x="166" y="112" width="180" height="252" rx="18" fill="none" stroke="#EFC14A" stroke-width="18" transform="rotate(-8 256 238)"/>
-  <rect x="194" y="150" width="124" height="96" rx="6" fill="#EFC14A" opacity=".22" transform="rotate(-8 256 238)"/>
-  <path d="M256 168l10 26 26 10-26 10-10 26-10-26-26-10 26-10z" fill="#EFC14A" transform="rotate(-8 256 238)"/>
-  <path d="M120 392h272" stroke="#2E3757" stroke-width="14" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="112" fill="#FFFFFF"/>
+  <g id="dibujo">
+    <rect x="96" y="80" width="300" height="360" rx="24" fill="#000000"/>
+    <rect x="80" y="64" width="300" height="360" rx="24" fill="#FFFFFF" stroke="#000000" stroke-width="14"/>
+    <g fill="none" stroke="#000000" stroke-width="8">
+      <rect x="106" y="90" width="74" height="98" rx="8"/><rect x="192" y="90" width="74" height="98" rx="8"/>
+      <rect x="278" y="90" width="74" height="98" rx="8"/><rect x="106" y="200" width="74" height="98" rx="8"/>
+      <rect x="106" y="310" width="74" height="98" rx="8"/>
+    </g>
+    <rect x="192" y="200" width="74" height="98" rx="8" fill="#FFCB05" stroke="#000000" stroke-width="8"/>
+    <path d="M396 396l52 52" stroke="#000000" stroke-width="40" stroke-linecap="round"/>
+    <path d="M396 396l52 52" stroke="#FFCB05" stroke-width="20" stroke-linecap="round"/>
+    <circle cx="330" cy="330" r="92" fill="#FFFFFF" stroke="#000000" stroke-width="16"/>
+    <rect x="296" y="282" width="68" height="94" rx="8" fill="#E23B32" stroke="#000000" stroke-width="8"/>
+    <path d="M276 296a64 64 0 0 1 40-36" fill="none" stroke="#000000" stroke-width="10" stroke-linecap="round" opacity=".25"/>
+  </g>
 </svg>
